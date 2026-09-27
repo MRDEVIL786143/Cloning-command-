@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cyber Terminal Runner</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand-wrap">
+                <span class="brand-dot"></span>
+                <span class="brand-name">MRD3V1L // TERMINAL</span>
+            </div>
+            <div class="top-actions">
+                <button id="runBtn" class="primary">RUN</button>
+                <button id="stopBtn" class="danger">STOP</button>
+                <button id="clearBtn" class="ghost">CLEAR</button>
+            </div>
+        </header>
+
+        <aside class="controls-panel">
+            <div class="field-group">
+                <label for="scriptPath">Python file path</label>
+                <input id="scriptPath" value="./safe_script.py" placeholder="./safe_script.py" />
+            </div>
+
+            <div class="field-group">
+                <label for="args">Arguments</label>
+                <input id="args" value="--count 5" placeholder="--count 5" />
+            </div>
+
+            <div class="field-group">
+                <label for="workingDir">Working directory</label>
+                <input id="workingDir" value="." placeholder="." />
+            </div>
+
+            <div class="field-group">
+                <label for="envVars">Environment variables (one per line, KEY=VALUE)</label>
+                <textarea id="envVars" rows="5" placeholder="APP_NAME=cyber-runner
+MODE=prod"></textarea>
+            </div>
+
+            <div class="status-box" id="statusBox">Status: ready</div>
+        </aside>
+
+        <main class="terminal-panel">
+            <div class="terminal-header">
+                <span class="terminal-title">root@cyber-shell:~#</span>
+            </div>
+            <div id="terminal" class="terminal" aria-live="polite"></div>
+            <div class="input-row">
+                <input id="terminalInput" type="text" placeholder="Type input for running process and press Enter" />
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const socket = io();
+        const terminal = document.getElementById('terminal');
+        const statusBox = document.getElementById('statusBox');
+        const terminalInput = document.getElementById('terminalInput');
+
+        function writeToTerminal(text) {
+            const line = document.createElement('div');
+            line.textContent = text;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function setStatus(status, message) {
+            statusBox.textContent = `Status: ${status} ${message ? '| ' + message : ''}`;
+        }
+
+        socket.on('connect', () => {
+            writeToTerminal('> connected to cyber terminal');
+        });
+
+        socket.on('status', (payload) => {
+            setStatus(payload.status, payload.message || '');
+            if (payload.message) {
+                writeToTerminal(`> ${payload.message}`);
+            }
+        });
+
+        socket.on('output', (payload) => {
+            writeToTerminal(payload.data.replace(/\n$/, ''));
+        });
+
+        document.getElementById('runBtn').addEventListener('click', () => {
+            const payload = {
+                script_path: document.getElementById('scriptPath').value,
+                args: document.getElementById('args').value,
+                working_dir: document.getElementById('workingDir').value,
+                env_vars: document.getElementById('envVars').value,
+            };
+            terminal.innerHTML = '';
+            socket.emit('start', payload);
+        });
+
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            socket.emit('stop');
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            terminal.innerHTML = '';
+        });
+
+        terminalInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                const value = terminalInput.value;
+                if (!value.trim()) return;
+                socket.emit('send_input', { text: value + '\n' });
+                terminalInput.value = '';
+            }
+        });
+    </script>
+</body>
+</html>
